@@ -219,7 +219,7 @@ impl ParseNode {
             },
             ParseNode::Subtract { left, right } => {
                 println!("Subtract");
-                ParseNode::pretty_print_aux(Rc::clone(&left), 0, 0b1);
+                ParseNode::pretty_print_aux(Rc::clone(&left), 0, 0b0);
                 ParseNode::pretty_print_aux(Rc::clone(&right), 0, 0b1);
             },
             ParseNode::DivideNode { left, right } =>  {
@@ -331,19 +331,18 @@ impl Parser {
         }
     }
 
-    fn parse_add_expr(&mut self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
+    fn parse_add_expr(&self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
         let mut pointer = pointer;
         pointer = Parser::remove_whitespace(pointer);
 
-        let left_tree = match self.parse_expr0(pointer.clone()) {
+        let left_tree = match self.parse_expr1(pointer.clone()) {
             Ok((node, new_pointer)) => {
                 pointer = new_pointer;
                 node
             },
             Err(_) => return Err(ParseError::CouldNotParse)
         };
-
-        pointer = pointer.next();
+        // println!("{:?}", left_tree);
         pointer = Parser::remove_whitespace(pointer);
 
         if !Parser::is_plus_token(&pointer) {
@@ -352,7 +351,8 @@ impl Parser {
 
         pointer = pointer.next();
 
-        let node = match self.parse_expr1(pointer.clone()) {
+
+        let node = match self.parse_expr2(pointer.clone()) {
             Ok((node, new_pointer)) => {
                 pointer = new_pointer;
                 node
@@ -360,6 +360,7 @@ impl Parser {
             Err(_) => return Err(ParseError::CouldNotParse)
         };
 
+        // println!("{:?}", node);
         return Ok((ParseNode::Add {
             left: Rc::new(left_tree),
             right: Rc::new(node)
@@ -367,11 +368,11 @@ impl Parser {
 
     }
 
-    fn parse_sub_expr(&mut self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
+    fn parse_sub_expr(&self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
         let mut pointer = pointer;
         pointer = Parser::remove_whitespace(pointer);
 
-        let left_tree = match self.parse_expr0(pointer.clone()) {
+        let left_tree = match self.parse_expr1(pointer.clone()) {
             Ok((node, new_pointer)) => {
                 pointer = new_pointer;
                 node
@@ -379,7 +380,6 @@ impl Parser {
             Err(_) => return Err(ParseError::CouldNotParse)
         };
 
-        pointer = pointer.next();
         pointer = Parser::remove_whitespace(pointer);
 
         if !Parser::is_minus_token(&pointer) {
@@ -388,7 +388,7 @@ impl Parser {
 
         pointer = pointer.next();
 
-        let node = match self.parse_expr1(pointer.clone()) {
+        let node = match self.parse_expr2(pointer.clone()) {
             Ok((node, new_pointer)) => {
                 pointer = new_pointer;
                 node
@@ -403,7 +403,7 @@ impl Parser {
 
     }
 
-    fn parse_number(&mut self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
+    fn parse_number(&self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
         let mut pointer = pointer;
         pointer = Parser::remove_whitespace(pointer);
 
@@ -417,10 +417,12 @@ impl Parser {
             _ => return Err(ParseError::CouldNotParse)
         };
 
-        return Ok((ParseNode::NumberNode(num), pointer.clone()));
+        pointer = pointer.next();
+
+        return Ok((ParseNode::NumberNode(num), pointer));
     }
 
-    fn parse_expr1(&mut self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
+    fn parse_expr2(&self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
         match self.parse_add_expr(pointer.clone()) {
             Ok(res) => return Ok(res),
             Err(_) => ()
@@ -429,18 +431,18 @@ impl Parser {
             Ok(res) => return Ok(res),
             Err(_) => ()
         };
-        match self.parse_expr0(pointer.clone()) {
+        match self.parse_expr1(pointer.clone()) {
             Ok(res) => return Ok(res),
             Err(_) => ()
         };
         return Err(ParseError::CouldNotParse);
     }
 
-    fn parse_div_expr(&mut self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
+    fn parse_div_expr(&self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
 
         let mut pointer = pointer;
         
-        let number_node = match self.parse_number(pointer.clone()) {
+        let number_node = match self.parse_expr0(pointer.clone()) {
             Ok((node, new_pointer)) => {
                 pointer = new_pointer;
                 node
@@ -448,7 +450,7 @@ impl Parser {
             Err(_) => return Err(ParseError::CouldNotParse)
         };
 
-        pointer = Parser::remove_whitespace(pointer.next());
+        pointer = Parser::remove_whitespace(pointer);
 
         match pointer.peek() {
             Ok(token) => match token {
@@ -459,7 +461,7 @@ impl Parser {
         };
         pointer = pointer.next();
 
-        let node = match self.parse_expr0(pointer.clone()) {
+        let node = match self.parse_expr1(pointer.clone()) {
             Ok((node, new_pointer)) => {
                 pointer = new_pointer;
                 node
@@ -473,10 +475,10 @@ impl Parser {
         }, pointer));
     }
 
-    fn parse_mult_expr(&mut self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
+    fn parse_mult_expr(&self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
         let mut pointer = Parser::remove_whitespace(pointer);
         
-        let number_node = match self.parse_number(pointer.clone()) {
+        let number_node = match self.parse_expr0(pointer.clone()) {
             Ok((node, new_pointer)) => {
                 pointer = new_pointer;
                 node
@@ -484,7 +486,7 @@ impl Parser {
             Err(_) => return Err(ParseError::CouldNotParse)
         };
 
-        pointer = Parser::remove_whitespace(pointer.next());
+        pointer = Parser::remove_whitespace(pointer);
 
         match pointer.peek() {
             Ok(token) => match token {
@@ -496,7 +498,7 @@ impl Parser {
 
         pointer = pointer.next();
 
-        let node = match self.parse_expr0(pointer.clone()) {
+        let node = match self.parse_expr1(pointer.clone()) {
             Ok((node, new_pointer)) => {
                 pointer = new_pointer;
                 node
@@ -510,7 +512,7 @@ impl Parser {
         }, pointer));
     }
 
-    fn parse_expr0(&mut self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
+    fn parse_expr1(&self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
         match self.parse_div_expr(pointer.clone()) {
             Ok(res) => return Ok(res),
             Err(_) => ()
@@ -520,19 +522,124 @@ impl Parser {
             Ok(res) => return Ok(res),
             Err(_) => ()
         };
-        match self.parse_number(pointer.clone()) {
+        match self.parse_expr0(pointer.clone()) {
             Ok(res) => return Ok(res),
             Err(_) => ()
         };
         return Err(ParseError::CouldNotParse);
     }
 
-    fn parse(&mut self) -> Result<ParseNode, ParseError> {
+    fn parse_expr0(&self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
+        match self.parse_round_parenthesis_expr(pointer.clone()) {
+            Ok(res) => return Ok(res),
+            Err(_) => ()
+        };
+
+        match self.parse_number(pointer.clone()) {
+            Ok(res) => return Ok(res),
+            Err(_) => ()
+        };
+        return Err(ParseError::CouldNotParse);
+
+    }
+
+    fn parse_round_parenthesis_expr(&self, pointer: Pointer<Token>) -> Result<(ParseNode, Pointer<Token>), ParseError> {
+        let mut pointer = Parser::remove_whitespace(pointer);
+
+        match pointer.peek() {
+            Ok(token) => match token {
+                Token::OpenRoundPar => (),
+                _ => return Err(ParseError::CouldNotParse)
+            },
+            Err(_) => return Err(ParseError::CouldNotParse)
+        }
+        pointer = pointer.next();
+
+        let node = match self.parse_expr2(pointer.clone()) {
+            Ok((node, new_pointer)) => {
+                pointer = new_pointer;
+                node
+            },
+            Err(_) => return Err(ParseError::CouldNotParse)
+        };
+
+        pointer = Parser::remove_whitespace(pointer);
+        
+        // println!("{:?}", node);
+        match pointer.peek() {
+            Ok(token) => match token {
+                Token::CloseRoundPar => (),
+                _ => return Err(ParseError::CouldNotParse)
+            },
+            Err(_) => return Err(ParseError::CouldNotParse)
+        }
+        pointer = pointer.next();
+
+        return Ok((node, pointer));
+    }
+
+    fn parse(&self) -> Result<ParseNode, ParseError> {
         let pointer = self.pointer.clone();
-        return match self.parse_expr1(pointer.clone()) {
+        return match self.parse_expr2(pointer.clone()) {
             Ok((node, _)) => Ok(node),
             Err(e) => Err(e)
         };
+    }
+}
+
+struct Evaluator {}
+
+impl Evaluator {
+    fn evaluate(node: &ParseNode) -> i32 {
+        match node {
+            ParseNode::Add {left, right} => {
+                let left = Evaluator::evaluate_aux(Rc::clone(&left));
+                let right = Evaluator::evaluate_aux(Rc::clone(&right));
+                left + right
+            },
+            ParseNode::Subtract { left, right } => {
+                let left = Evaluator::evaluate_aux(Rc::clone(&left));
+                let right = Evaluator::evaluate_aux(Rc::clone(&right));
+                left - right
+            },
+            ParseNode::DivideNode { left, right } => {
+                let left = Evaluator::evaluate_aux(Rc::clone(&left));
+                let right = Evaluator::evaluate_aux(Rc::clone(&right));
+                left / right
+            },
+            ParseNode::Multiply { left, right } => {
+                let left = Evaluator::evaluate_aux(Rc::clone(&left));
+                let right = Evaluator::evaluate_aux(Rc::clone(&right));
+                left * right
+            },
+            ParseNode::NumberNode(num) => *num
+        }
+    }
+
+    fn evaluate_aux(node: Rc<ParseNode>) -> i32 {
+        match &*node {
+            ParseNode::Add {left, right} => {
+                let left = Evaluator::evaluate_aux(Rc::clone(&left));
+                let right = Evaluator::evaluate_aux(Rc::clone(&right));
+                left + right
+            },
+            ParseNode::Subtract { left, right } => {
+                let left = Evaluator::evaluate_aux(Rc::clone(&left));
+                let right = Evaluator::evaluate_aux(Rc::clone(&right));
+                left - right
+            },
+            ParseNode::DivideNode { left, right } => {
+                let left = Evaluator::evaluate_aux(Rc::clone(&left));
+                let right = Evaluator::evaluate_aux(Rc::clone(&right));
+                left / right
+            },
+            ParseNode::Multiply { left, right } => {
+                let left = Evaluator::evaluate_aux(Rc::clone(&left));
+                let right = Evaluator::evaluate_aux(Rc::clone(&right));
+                left * right
+            },
+            ParseNode::NumberNode(num) => *num
+        }
     }
 }
 
@@ -544,31 +651,30 @@ fn command_line() {
     io::stdin()
         .read_line(&mut line)
         .expect("Failed to read line");
-    
-    // let line = line.trim();
-    // println!("{}", line.len());
 
     let mut lexer = Lexer::new(line.as_str());
     let res = lexer.lex();
 
-    match res {
-        Ok(res) => {
-            println!("--- Tokens ---");
-            for token in &res {
-                println!("- {:?}", token);
-            }
-            let mut parser = Parser::new(res);
-            match parser.parse() {
-                Ok(res) => {
-                    // println!("{:?}", res);
-                    res.pretty_print();
-                },
-                Err(_) => ()
-            }
+    let tokens = match res {
+        Ok(res) => res,
+        Err(_) => return
+    };
 
-        },
-        Err(_) => ()
+    println!("--- Tokens ---");
+    for token in &tokens {
+        println!("- {:?}", token);
     }
+
+    let parser = Parser::new(tokens);
+    let root = match parser.parse() {
+        Ok(root) => root,
+        Err(_) => return
+    };
+    println!("--- Parse Tree ---");
+    root.pretty_print();
+
+    let result = Evaluator::evaluate(&root);
+    println!("result: {}", result);
 }
 
 fn main() {
